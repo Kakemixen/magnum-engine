@@ -1,3 +1,4 @@
+#include <Corrade/Containers/GrowableArray.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/Renderer.h>
 #include <Magnum/GL/Mesh.h>
@@ -11,8 +12,10 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
 #include <Magnum/Trade/MeshData.h>
+#include <Magnum/Timeline.h>
 
 #include <iostream>
+#include <vector>
 
 namespace Magnum
 {
@@ -30,12 +33,14 @@ public:
             Vector3 position,
             const Color4& color)
         : SceneGraph::Drawable3D{object, &group}, 
-          //m_primitive(primitive),
           m_mesh(MeshTools::compile(primitive)), 
           m_shader(shader),
           m_position(position),
           m_color{color} 
     {}
+
+    Primitive& updatePosition(Vector3 newPosition);
+    const Vector3& getPosition() const;
 
 private:
     void draw(const Matrix4& transformationMatrixm, SceneGraph::Camera3D& camera) override;
@@ -44,8 +49,6 @@ private:
     Shaders::Phong& m_shader;
     Vector3 m_position;
     Color4 m_color;
-    
-    //Magnum::Trade::MeshData& m_primitive;
 };
 
 void Primitive::draw(const Matrix4& transformationMatrix, SceneGraph::Camera3D& camera)
@@ -65,10 +68,23 @@ void Primitive::draw(const Matrix4& transformationMatrix, SceneGraph::Camera3D& 
         .draw(m_mesh);
 }
 
+Primitive& Primitive::updatePosition(Vector3 newPosition){
+    m_position = newPosition;
+    return (*this); // method chaining
+}
+
+const Vector3& Primitive::getPosition() const {
+    return m_position;
+}
+
 
 class ApplicationLayer: public Platform::Application {
 public:
     explicit ApplicationLayer(const Arguments& arguments);
+
+    Primitive* addSphere(Vector3 initialPosition, float color);
+
+    double getFrameDelta();
 
 protected:
     void drawEvent() override; // Called everytime the screen is (re)drawn
@@ -85,7 +101,6 @@ protected:
      *  - An application layer that is responsible for rendering and inputs and such.
      *      - essentially the layer/medium between the player of the game and the engine/game itself
      *  - The actual engine / game
-     *      - the main engine class callc the mainLoopIteration() of the application layer in each loop
      * */
 
     // variables for dummy test
@@ -101,6 +116,10 @@ protected:
     SceneGraph::DrawableGroup3D m_drawables;
     Vector3 m_previousPosition;
 
+    // timing
+    Timeline timeline;
+
+    // Keep shaders and mesh as member variable to keep them alive
     Shaders::Phong m_shader;
     GL::Mesh m_mesh;
 };
@@ -127,11 +146,25 @@ ApplicationLayer::ApplicationLayer(const Arguments& arguments):
         .setSpecularColor(0xffffff_rgbf)
         .setShininess(80.0f);
 
-    Trade::MeshData sphere = Primitives::icosphereSolid(2);
+    /*
     new Primitive(m_manipulator, m_drawables, sphere, m_shader, {0.f, 0.f, -4.f}, 
             Magnum::Color3::fromHsv({35.0_degf, 1.0f, 1.0f}));
     new Primitive(m_manipulator, m_drawables, sphere, m_shader, {2.f, 1.f, -6.f}, 
             Magnum::Color3::fromHsv({75.0_degf, 1.0f, 1.0f}));
+    */
+
+    timeline.start();
+}
+
+double ApplicationLayer::getFrameDelta(){
+    return timeline.previousFrameDuration();
+}
+
+Primitive* ApplicationLayer::addSphere(Vector3 initialPosition, float color){
+    using namespace Math::Literals;
+    Trade::MeshData sphere = Primitives::icosphereSolid(2);
+    return new Primitive(m_manipulator, m_drawables, sphere, m_shader, initialPosition, 
+            Magnum::Color3::fromHsv({Deg(color), 1.0f, 1.0f}));
 }
 
 void ApplicationLayer::drawEvent() {
@@ -140,6 +173,7 @@ void ApplicationLayer::drawEvent() {
     m_camera->draw(m_drawables); // draw the list of drawables
 
     swapBuffers();
+    timeline.nextFrame();
 }
 
 } /* Magnum */ 
@@ -151,22 +185,36 @@ class Engine {
         //~Engine();
 
         void run();
+        void update(float frameDelta);
 
     private:
         bool mainLoopIteration();
 
         // Need pointer because of creating and such
         Magnum::ApplicationLayer* m_applicationLayer = nullptr;
-        
+        std::vector<Magnum::Primitive*> spheres;       
 };
 
 Engine::Engine(int argc, char** argv){
     m_applicationLayer = new Magnum::ApplicationLayer({argc, argv});
+    spheres.reserve(2);
+    spheres.push_back(m_applicationLayer->addSphere({0.f, 0.f, -8.f}, 35.f));
+    spheres.push_back(m_applicationLayer->addSphere({2.f, 1.f, -6.f}, 75.f));
+}
+
+void Engine::update(float frameDelta){
+    using namespace Magnum;
+    Vector3 oldPosition = spheres[1]->getPosition();
+    Vector3 velocity = {0.f, 0.f, -1.f};
+    Vector3 newPosition = oldPosition + (velocity * frameDelta);
+    spheres[1]->updatePosition(newPosition);
 }
 
 bool Engine::mainLoopIteration() {
-    m_applicationLayer->redraw();
-    return m_applicationLayer->mainLoopIteration(); 
+    std::cout << m_applicationLayer->getFrameDelta() << std::endl;
+    update(m_applicationLayer->getFrameDelta());
+    m_applicationLayer->redraw(); //ensure drawing of frame
+    return m_applicationLayer->mainLoopIteration(); //application returns if is exited
 }
 
 void Engine::run(){
