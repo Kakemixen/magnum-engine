@@ -27,32 +27,40 @@ public:
             SceneGraph::DrawableGroup3D& group,
             const Trade::MeshData& primitive,
             Shaders::Phong& shader,
+            Vector3 position,
             const Color4& color)
         : SceneGraph::Drawable3D{object, &group}, 
           //m_primitive(primitive),
           m_mesh(MeshTools::compile(primitive)), 
           m_shader(shader),
+          m_position(position),
           m_color{color} 
     {}
 
 private:
     void draw(const Matrix4& transformationMatrixm, SceneGraph::Camera3D& camera) override;
 
-    Shaders::Phong& m_shader;
     GL::Mesh m_mesh;
+    Shaders::Phong& m_shader;
+    Vector3 m_position;
     Color4 m_color;
+    
     //Magnum::Trade::MeshData& m_primitive;
 };
 
 void Primitive::draw(const Matrix4& transformationMatrix, SceneGraph::Camera3D& camera)
 {
+    Matrix4 thisTransform = transformationMatrix;
+    thisTransform.translation() = m_position;
     m_shader
         .setDiffuseColor(m_color)
         .setLightPositions({
                 {camera.cameraMatrix().transformPoint({-3.0f, 10.0f, 10.0f}), 0.0f}
         })
-        .setTransformationMatrix(transformationMatrix)
-        .setNormalMatrix(transformationMatrix.normalMatrix())
+        //.setTransformationMatrix(transformationMatrix)
+        //.setNormalMatrix(transformationMatrix.normalMatrix())
+        .setTransformationMatrix(thisTransform)
+        .setNormalMatrix(thisTransform.normalMatrix())
         .setProjectionMatrix(camera.projectionMatrix())
         .draw(m_mesh);
 }
@@ -120,9 +128,11 @@ ApplicationLayer::ApplicationLayer(const Arguments& arguments):
         .setSpecularColor(0xffffff_rgbf)
         .setShininess(80.0f);
 
-    Trade::MeshData primitive = Primitives::icosphereSolid(2);
-    Magnum::Color3 color = Magnum::Color3::fromHsv({35.0_degf, 1.0f, 1.0f});
-    new Primitive(m_manipulator, m_drawables, primitive, m_shader, color);
+    Trade::MeshData sphere = Primitives::icosphereSolid(2);
+    new Primitive(m_manipulator, m_drawables, sphere, m_shader, {0.f, 0.f, -4.f}, 
+            Magnum::Color3::fromHsv({35.0_degf, 1.0f, 1.0f}));
+    new Primitive(m_manipulator, m_drawables, sphere, m_shader, {2.f, 1.f, -6.f}, 
+            Magnum::Color3::fromHsv({75.0_degf, 1.0f, 1.0f}));
 }
 
 void ApplicationLayer::drawEvent() {
@@ -156,16 +166,12 @@ Engine::Engine(int argc, char** argv){
 }
 
 bool Engine::mainLoopIteration() {
-    m_applicationLayer->mainLoopIteration(); 
     m_applicationLayer->redraw();
-    return true;
+    return m_applicationLayer->mainLoopIteration(); 
 }
 
 void Engine::run(){
-    //while(mainLoopIteration()){}
-    for(int i = 0; i < 100; i++) {
-        mainLoopIteration();
-    }
+    while(mainLoopIteration()){}
 }
 
 
