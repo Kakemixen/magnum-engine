@@ -107,8 +107,7 @@ protected:
 
 ApplicationLayer::ApplicationLayer(const Arguments& arguments):
     Platform::Application(arguments, Configuration{}
-            .setTitle("basic engine")
-            .setWindowFlags(Configuration::WindowFlag::Resizable))
+            .setTitle("basic engine"))
 {
 	using namespace Math::Literals;
     m_cameraObject //All scenes need camera
