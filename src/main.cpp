@@ -1,38 +1,100 @@
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/Renderer.h>
+#include <Magnum/GL/Mesh.h>
+#include <Magnum/Math/Color.h>
+#include <Magnum/MeshTools/Compile.h>
 #include <Magnum/Platform/GlfwApplication.h>
 #include <Magnum/Primitives/Icosphere.h>
+#include <Magnum/SceneGraph/Drawable.h>
+#include <Magnum/Shaders/Phong.h>
+#include <Magnum/SceneGraph/Camera.h>
+#include <Magnum/SceneGraph/MatrixTransformation3D.h>
+#include <Magnum/SceneGraph/Scene.h>
+#include <Magnum/Trade/MeshData.h>
+
 #include <iostream>
 
 namespace Magnum
 {
+
+typedef SceneGraph::Object<SceneGraph::MatrixTransformation3D> Object3D;
+typedef SceneGraph::Scene<SceneGraph::MatrixTransformation3D> Scene3D;
+
+class Primitive: public SceneGraph::Drawable3D
+{
+public:
+    explicit Primitive(Object3D& object, 
+            SceneGraph::DrawableGroup3D& group,
+            const Trade::MeshData& primitive,
+            Shaders::Phong& shader,
+            const Color4& color)
+        : SceneGraph::Drawable3D{object, &group}, 
+          //m_primitive(primitive),
+          m_mesh(MeshTools::compile(primitive)), 
+          m_shader(shader),
+          m_color{color} 
+    {}
+
+private:
+    void draw(const Matrix4& transformationMatrixm, SceneGraph::Camera3D& camera) override;
+
+    Shaders::Phong& m_shader;
+    GL::Mesh m_mesh;
+    Color4 m_color;
+    //Magnum::Trade::MeshData& m_primitive;
+};
+
+void Primitive::draw(const Matrix4& transformationMatrix, SceneGraph::Camera3D& camera)
+{
+    m_shader
+        .setDiffuseColor(m_color)
+        .setLightPositions({
+                {camera.cameraMatrix().transformPoint({-3.0f, 10.0f, 10.0f}), 0.0f}
+        })
+        .setTransformationMatrix(transformationMatrix)
+        .setNormalMatrix(transformationMatrix.normalMatrix())
+        .setProjectionMatrix(camera.projectionMatrix())
+        .draw(m_mesh);
+}
+
+
 class ApplicationLayer: public Platform::Application {
-    public:
-        explicit ApplicationLayer(const Arguments& arguments);
+public:
+    explicit ApplicationLayer(const Arguments& arguments);
 
-    protected:
-        void drawEvent() override; // Called everytime the screen is (re)drawn
-        //void exitEvent(ExitEvent &event) override; // Called when <C-C>
-        // bool mainLoopIteration(); // Called in a loop until program should close
-        /* So let's talk a bit about the mainLoopIteration() function.
-         * By default, it calls drawEvent() and glfwPollEvents() within some sensible calls to ensure stuff works.
-         * Of importance, only call drawEvent() when the draw flag is set,
-         * and check if it should close by checking glfwWindowShouldClose(m_window).
-         * While this technically allows me to treat the virtual drawEvent(),
-         * it required me to set draw for each frame and forces game-logic into a "draw" function
-         * However, it is not virtual, and uses private values to check whether the window was initialized correctly
-         * A solution, then, is to separate those two things into separate classes:
-         *  - An application layer that is responsible for rendering and inputs and such.
-         *      - essentially the layer/medium between the player of the game and the engine/game itself
-         *  - The actual engine / game
-         *      - the main engine class callc the mainLoopIteration() of the application layer in each loop
-         * */
+protected:
+    void drawEvent() override; // Called everytime the screen is (re)drawn
+    //void exitEvent(ExitEvent &event) override; // Called when <C-C>
+    // bool mainLoopIteration(); // Called in a loop until program should close
+    /* So let's talk a bit about the mainLoopIteration() function.
+     * By default, it calls drawEvent() and glfwPollEvents() within some sensible calls to ensure stuff works.
+     * Of importance, only call drawEvent() when the draw flag is set,
+     * and check if it should close by checking glfwWindowShouldClose(m_window).
+     * While this technically allows me to treat the virtual drawEvent(),
+     * it required me to set draw for each frame and forces game-logic into a "draw" function
+     * However, it is not virtual, and uses private values to check whether the window was initialized correctly
+     * A solution, then, is to separate those two things into separate classes:
+     *  - An application layer that is responsible for rendering and inputs and such.
+     *      - essentially the layer/medium between the player of the game and the engine/game itself
+     *  - The actual engine / game
+     *      - the main engine class callc the mainLoopIteration() of the application layer in each loop
+     * */
 
-        // variables for dummy test
-        Vector3 m_staticSpherePosition;
-        Vector3 m_movingSpherePosition;
-        Vector3 m_movingSphereVelocity;
-        Float m_sphereRadius = 1;
+    // variables for dummy test
+    Vector3 m_staticSpherePosition;
+    Vector3 m_movingSpherePosition;
+    Vector3 m_movingSphereVelocity;
+    Float m_sphereRadius = 1;
+
+    // stuff related to the scenegraph and thus rendering
+    Scene3D m_scene;
+    Object3D m_manipulator, m_cameraObject;
+    SceneGraph::Camera3D* m_camera;
+    SceneGraph::DrawableGroup3D m_drawables;
+    Vector3 m_previousPosition;
+
+    Shaders::Phong m_shader;
+    GL::Mesh m_mesh;
 };
 
 ApplicationLayer::ApplicationLayer(const Arguments& arguments):
@@ -41,12 +103,32 @@ ApplicationLayer::ApplicationLayer(const Arguments& arguments):
             .setWindowFlags(Configuration::WindowFlag::Resizable))
 {
 	using namespace Math::Literals;
+    m_cameraObject //All scenes need camera
+        .setParent(&m_scene)
+        .translate(Vector3::zAxis(5.0f));
+    (*(m_camera = new SceneGraph::Camera3D{m_cameraObject}))
+        .setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::Extend)
+        .setProjectionMatrix(Matrix4::perspectiveProjection(35.0_degf, 1.0f, 0.01f, 1000.0f))
+        .setViewport(GL::defaultFramebuffer.viewport().size());
+
+    // base object for easy manipulation
+    m_manipulator.setParent(&m_scene);
+    GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+    GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
+    m_shader
+        .setAmbientColor(0x111111_rgbf)
+        .setSpecularColor(0xffffff_rgbf)
+        .setShininess(80.0f);
+
+    Trade::MeshData primitive = Primitives::icosphereSolid(2);
+    Magnum::Color3 color = Magnum::Color3::fromHsv({35.0_degf, 1.0f, 1.0f});
+    new Primitive(m_manipulator, m_drawables, primitive, m_shader, color);
 }
 
 void ApplicationLayer::drawEvent() {
-    GL::defaultFramebuffer.clear(GL::FramebufferClear::Color);
+    GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
 
-    /* TODO: Add your drawing code here */
+    m_camera->draw(m_drawables); // draw the list of drawables
 
     swapBuffers();
 }
@@ -57,7 +139,7 @@ class Engine {
     public:
         explicit Engine();
         explicit Engine(int argc, char** argv);
-        ~Engine();
+        //~Engine();
 
         void run();
 
@@ -82,7 +164,6 @@ bool Engine::mainLoopIteration() {
 void Engine::run(){
     //while(mainLoopIteration()){}
     for(int i = 0; i < 100; i++) {
-        std::cout << i << std::endl;
         mainLoopIteration();
     }
 }
