@@ -10,7 +10,8 @@ find_package(Magnum REQUIRED
     GlfwApplication)
 
 add_executable(basic-engine
-    main.cpp)
+    main.cpp
+    application-layer/application.cpp)
 target_link_libraries(basic-engine PRIVATE
     Corrade::Main
     Magnum::Application
@@ -20,3 +21,5 @@ target_link_libraries(basic-engine PRIVATE
     Magnum::MeshTools
     Magnum::Primitives
     Magnum::Shaders)
+target_include_directories(basic-engine PRIVATE
+    "api")
