@@ -6,7 +6,7 @@
 #include <Magnum/Math/Color.h>
 #include <Magnum/MeshTools/Compile.h>
 #include <Magnum/Platform/GlfwApplication.h>
-#include <Magnum/Primitives/Icosphere.h>
+#include <Magnum/Primitives/Cube.h>
 #include <Magnum/Shaders/Phong.h>
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/SceneGraph/Drawable.h>
@@ -23,17 +23,11 @@ typedef SceneGraph::Scene<SceneGraph::MatrixTransformation3D> Scene3D;
 
 void Primitive::draw(const Matrix4& transformationMatrix, SceneGraph::Camera3D& camera)
 {
-    Matrix4 thisTransform = transformationMatrix;
-    thisTransform.translation() = m_position;
     m_shader
         .setDiffuseColor(m_color)
-        .setLightPositions({
-                {camera.cameraMatrix().transformPoint({-3.0f, 10.0f, 10.0f}), 0.0f}
-        })
-        //.setTransformationMatrix(transformationMatrix)
-        //.setNormalMatrix(transformationMatrix.normalMatrix())
-        .setTransformationMatrix(thisTransform)
-        .setNormalMatrix(thisTransform.normalMatrix())
+        .setLightPositions({{13.0f, 2.0f, 5.0f, 0.0f}})
+        .setTransformationMatrix(transformationMatrix)
+        .setNormalMatrix(transformationMatrix.normalMatrix())
         .setProjectionMatrix(camera.projectionMatrix())
         .draw(m_mesh);
 }
@@ -52,10 +46,12 @@ ApplicationLayer::ApplicationLayer(const Arguments& arguments):
             .setTitle("basic engine"))
 {
 	using namespace Math::Literals;
-    m_cameraObject //All scenes need camera
+    m_cameraObject = new Object3D{&m_scene};
+    (*m_cameraObject) //All scenes need camera
         .setParent(&m_scene)
         .translate(Vector3::zAxis(5.0f));
-    (*(m_camera = new SceneGraph::Camera3D{m_cameraObject}))
+    m_camera  = new SceneGraph::Camera3D{*m_cameraObject};
+    (*m_camera)
         .setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::Extend)
         .setProjectionMatrix(Matrix4::perspectiveProjection(35.0_degf, 1.0f, 0.01f, 1000.0f))
         .setViewport(GL::defaultFramebuffer.viewport().size());
@@ -69,13 +65,6 @@ ApplicationLayer::ApplicationLayer(const Arguments& arguments):
         .setSpecularColor(0xffffff_rgbf)
         .setShininess(80.0f);
 
-    /*
-    new Primitive(m_manipulator, m_drawables, sphere, m_shader, {0.f, 0.f, -4.f}, 
-            Magnum::Color3::fromHsv({35.0_degf, 1.0f, 1.0f}));
-    new Primitive(m_manipulator, m_drawables, sphere, m_shader, {2.f, 1.f, -6.f}, 
-            Magnum::Color3::fromHsv({75.0_degf, 1.0f, 1.0f}));
-    */
-
     timeline.start();
 }
 
@@ -83,11 +72,13 @@ Float ApplicationLayer::getFrameDelta(){
     return timeline.previousFrameDuration();
 }
 
-Primitive* ApplicationLayer::addSphere(Vector3 initialPosition, float color){
+Primitive* ApplicationLayer::addCube(Vector3 initialPosition, float color){
     using namespace Math::Literals;
-    Trade::MeshData sphere = Primitives::icosphereSolid(2);
-    return new Primitive(m_manipulator, m_drawables, sphere, m_shader, initialPosition, 
+    Trade::MeshData cube = Primitives::cubeSolid();
+    Primitive* p = new Primitive(m_manipulator, m_drawables, cube, m_shader, initialPosition, 
             Magnum::Color3::fromHsv({Deg(color), 1.0f, 1.0f}));
+    p->translate(initialPosition);
+    return p;
 }
 
 void ApplicationLayer::drawEvent() {
@@ -97,6 +88,52 @@ void ApplicationLayer::drawEvent() {
 
     swapBuffers();
     timeline.nextFrame();
+}
+
+void ApplicationLayer::mousePressEvent(MouseEvent& event) {
+    if(event.button() != MouseEvent::Button::Left) return;
+
+    m_previousMousePosition = event.position();
+    event.setAccepted();
+}
+
+void ApplicationLayer::mouseMoveEvent(MouseMoveEvent& event) {
+    if(!(event.buttons() & MouseMoveEvent::Button::Left)) return;
+
+    /* We have to take window size, not framebuffer size, since the position is
+       in window coordinates and the two can be different on HiDPI systems */
+    const Vector2 delta = 3.0f*
+        Vector2{event.position() - m_previousMousePosition}/
+        Vector2{windowSize()};
+
+    (*m_cameraObject)
+        .rotate(Rad{-delta.y()}, m_cameraObject->transformation().right().normalized())
+        .rotateY(Rad{-delta.x()});
+
+    m_previousMousePosition = event.position();
+    event.setAccepted();
+}
+
+void ApplicationLayer::keyPressEvent(KeyEvent& event) {
+    if(event.key() == KeyEvent::Key::D) {
+        m_cameraObject->translate({.0f, .0f, -0.1f});
+    } else if(event.key() == KeyEvent::Key::S) {
+        m_cameraObject->translate({.0f, .0f, 0.1f});
+    } else if (event.key() == KeyEvent::Key::R) {
+        m_cameraObject->translate({-0.1f, .0f, .0f});
+    } else if (event.key() == KeyEvent::Key::T) {
+        m_cameraObject->translate({0.1f, .0f, .0f});
+    } else if (event.key() == KeyEvent::Key::W) {
+        m_cameraObject->translate({.0f, -0.1f, .0f});
+    } else if (event.key() == KeyEvent::Key::B) {
+        m_cameraObject->translate({.0f, 0.1f, .0f});
+    }
+}
+
+void ApplicationLayer::keyReleaseEvent(KeyEvent& event) {
+    if(event.key() == KeyEvent::Key::W || event.key() == KeyEvent::Key::S ||
+       event.key() == KeyEvent::Key::A || event.key() == KeyEvent::Key::D)
+        return;
 }
 
 } /* Magnum */ 

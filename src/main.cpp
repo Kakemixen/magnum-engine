@@ -23,16 +23,16 @@ class Engine {
 Engine::Engine(int argc, char** argv){
     m_applicationLayer = new Magnum::ApplicationLayer({argc, argv});
     spheres.reserve(2);
-    spheres.push_back(m_applicationLayer->addSphere({0.f, 0.f, -8.f}, 35.f));
-    spheres.push_back(m_applicationLayer->addSphere({2.f, 1.f, -6.f}, 75.f));
+    spheres.push_back(m_applicationLayer->addCube({0.f, 0.f, -8.f}, 35.f));
+    spheres.push_back(m_applicationLayer->addCube({3.f, 2.f, -5.f}, 75.f));
 }
 
 void Engine::update(float frameDelta){
     using namespace Magnum;
-    Vector3 oldPosition = spheres[1]->getPosition();
+    //Vector3 oldPosition = spheres[1]->getPosition();
     Vector3 velocity = {0.f, 0.f, -1.f};
-    Vector3 newPosition = oldPosition + (velocity * frameDelta);
-    spheres[1]->updatePosition(newPosition);
+    //Vector3 newPosition = oldPosition + (velocity * frameDelta);
+    spheres[1]->translate(velocity * frameDelta);
 }
 
 bool Engine::mainLoopIteration() {

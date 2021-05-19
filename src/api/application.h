@@ -17,16 +17,17 @@ namespace Magnum
 typedef SceneGraph::Object<SceneGraph::MatrixTransformation3D> Object3D;
 typedef SceneGraph::Scene<SceneGraph::MatrixTransformation3D> Scene3D;
 
-class Primitive: public SceneGraph::Drawable3D
+class Primitive: public Object3D, SceneGraph::Drawable3D
 {
 public:
-    explicit Primitive(Object3D& object, 
+    explicit Primitive(Object3D& parent, 
             SceneGraph::DrawableGroup3D& group,
             const Trade::MeshData& primitive,
             Shaders::Phong& shader,
             Vector3 position,
             const Color4& color)
-        : SceneGraph::Drawable3D{object, &group}, 
+        : Object3D{&parent},
+          SceneGraph::Drawable3D{*this, &group}, 
           m_mesh(MeshTools::compile(primitive)), 
           m_shader(shader),
           m_position(position),
@@ -49,7 +50,7 @@ class ApplicationLayer: public Platform::Application {
 public:
     explicit ApplicationLayer(const Arguments& arguments);
 
-    Primitive* addSphere(Vector3 initialPosition, float color);
+    Primitive* addCube(Vector3 initialPosition, float color);
 
     Float getFrameDelta();
 
@@ -70,15 +71,10 @@ protected:
      *  - The actual engine / game
      * */
 
-    // variables for dummy test
-    Vector3 m_staticSpherePosition;
-    Vector3 m_movingSpherePosition;
-    Vector3 m_movingSphereVelocity;
-    Float m_sphereRadius = 1;
-
     // stuff related to the scenegraph and thus rendering
     Scene3D m_scene;
-    Object3D m_manipulator, m_cameraObject;
+    Object3D m_manipulator;
+    Object3D* m_cameraObject;
     SceneGraph::Camera3D* m_camera;
     SceneGraph::DrawableGroup3D m_drawables;
     Vector3 m_previousPosition;
@@ -89,6 +85,18 @@ protected:
     // Keep shaders and mesh as member variable to keep them alive
     Shaders::Phong m_shader;
     GL::Mesh m_mesh;
+
+private:
+    /* Camera and interaction */
+    Matrix4 m_transformation, m_projection, m_view;
+    Vector2i m_previousMousePosition;
+
+    void mousePressEvent(MouseEvent& event) override;
+    //void mouseReleaseEvent(MouseEvent& event) override;
+    void mouseMoveEvent(MouseMoveEvent& event) override;
+    void keyPressEvent(KeyEvent& event) override;
+    void keyReleaseEvent(KeyEvent& event) override;
+
 };
 
 } /* Magnum */ 
