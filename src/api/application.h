@@ -45,12 +45,22 @@ private:
     Vector3 m_position;
     Color4 m_color;
 };
+/* Tranformation talk
+ * Each tranformation function (rotation/transation e.g.) has local variant
+ * Non-local variant transform in relation to parent object
+ *   So Rotate rotates in relation to the paren location
+ *   Translati in directon of parent object
+ * Local variant transforms in relation to this
+ *   Rotate around this origin, translate in direction object is facing
+ * I guess it is also important to say that rotating also rotates
+ * directions and the coordinate system related to this.
+ */
 
 class ApplicationLayer: public Platform::Application {
 public:
     explicit ApplicationLayer(const Arguments& arguments);
 
-    Primitive* addCube(Vector3 initialPosition, float color);
+    Primitive* addCube(Vector3 initialPosition, float color, Object3D* parent);
 
     Float getFrameDelta();
 

@@ -32,13 +32,16 @@ void Primitive::draw(const Matrix4& transformationMatrix, SceneGraph::Camera3D& 
         .draw(m_mesh);
 }
 
-Primitive& Primitive::updatePosition(Vector3 newPosition){
-    m_position = newPosition;
-    return (*this); // method chaining
+Primitive& Primitive::updatePosition(Vector3 newPosition){ 
+    Matrix4 new_transform = Matrix4::from(
+            this->transformation().rotation(),
+            newPosition);
+    this->setTransformation(new_transform);
+    return (*this); // method chaining 
 }
 
-const Vector3& Primitive::getPosition() const {
-    return m_position;
+const Vector3& Primitive::getPosition() const { 
+    return this->transformation().translation();
 }
 
 ApplicationLayer::ApplicationLayer(const Arguments& arguments):
@@ -49,7 +52,8 @@ ApplicationLayer::ApplicationLayer(const Arguments& arguments):
     m_cameraObject = new Object3D{&m_scene};
     (*m_cameraObject) //All scenes need camera
         .setParent(&m_scene)
-        .translate(Vector3::zAxis(5.0f));
+        .rotateYLocal(Rad(.3f))
+        .translate(Vector3::zAxis(15.0f)+Vector3::xAxis(4.f));
     m_camera  = new SceneGraph::Camera3D{*m_cameraObject};
     (*m_camera)
         .setAspectRatioPolicy(SceneGraph::AspectRatioPolicy::Extend)
@@ -72,10 +76,11 @@ Float ApplicationLayer::getFrameDelta(){
     return timeline.previousFrameDuration();
 }
 
-Primitive* ApplicationLayer::addCube(Vector3 initialPosition, float color){
+Primitive* ApplicationLayer::addCube(Vector3 initialPosition, float color, Object3D* parent){
     using namespace Math::Literals;
     Trade::MeshData cube = Primitives::cubeSolid();
-    Primitive* p = new Primitive(m_manipulator, m_drawables, cube, m_shader, initialPosition, 
+    Primitive* p = new Primitive(parent ? *parent : m_manipulator, 
+            m_drawables, cube, m_shader, initialPosition, 
             Magnum::Color3::fromHsv({Deg(color), 1.0f, 1.0f}));
     p->translate(initialPosition);
     return p;
@@ -107,8 +112,10 @@ void ApplicationLayer::mouseMoveEvent(MouseMoveEvent& event) {
         Vector2{windowSize()};
 
     (*m_cameraObject)
-        .rotate(Rad{-delta.y()}, m_cameraObject->transformation().right().normalized())
-        .rotateY(Rad{-delta.x()});
+        //.rotateLocal(Rad{-delta.y()}, m_cameraObject->transformation().right().normalized())
+        .rotateXLocal(Rad{-delta.y()})
+        .rotateYLocal(Rad{-delta.x()});
+    // TODO do magic with ZLocal rotation?
 
     m_previousMousePosition = event.position();
     event.setAccepted();
